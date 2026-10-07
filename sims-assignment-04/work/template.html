@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Madison Square Park Principles</title>
+<style>
+  :root { --bg:#f6f4ef; --panel:#fff; --ink:#1d1d1b; --mute:#6a675f; --line:#d9d5cb;
+          --route:#7b8794; --obs:#d62828; --edge:#e07a00; --shade:#1b8a6b; --tree:#8fbf8f; --park:#eef0e6; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161614; --panel:#1f1f1c; --ink:#ecebe6; --mute:#9d9a90; --line:#35332e;
+          --route:#9aa5b1; --obs:#ff6b6b; --edge:#ffa94d; --shade:#4cc9a0; --tree:#4f7a4f; --park:#23261f; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--ink); }
+  header { padding:14px 18px 8px; }
+  h1 { font-size:18px; margin:0 0 4px; }
+  header p { margin:0; max-width:900px; color:var(--mute); }
+  main { display:grid; grid-template-columns:260px 1fr 260px; gap:12px; padding:8px 18px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .panel h2 { font-size:13px; margin:0 0 6px; text-transform:uppercase; letter-spacing:.04em; color:var(--mute); }
+  button.row { display:block; width:100%; text-align:left; background:none; color:inherit; font:inherit;
+               border:1px solid var(--line); border-radius:6px; padding:7px 9px; margin:0 0 6px; cursor:pointer; }
+  button.row.on { outline:2px solid var(--ink); }
+  .sw { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  .big { font-size:18px; font-weight:600; }
+  .mute { color:var(--mute); font-size:12px; }
+  svg { width:100%; height:auto; display:block; background:var(--panel); border:1px solid var(--line); border-radius:8px; max-height:76vh; }
+  .controls { padding:6px 18px 0; display:grid; gap:10px; }
+  .controls label { display:block; font-weight:600; }
+  .controls input[type=range] { width:100%; }
+  footer { padding:10px 18px 24px; display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  table { border-collapse:collapse; font-size:12px; width:100%; }
+  td,th { border-bottom:1px solid var(--line); padding:3px 6px 3px 0; text-align:left; vertical-align:top; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } footer { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Madison Square Park: which stated principle walks like the person did?</h1>
+  <p>One person crossed the park from the northwest corner to the southern tip. Three simulated walkers cross it too: one takes the shortest route, one sticks to the park's edges, one stays under trees. The page scores how close each walker stays to the person, and marks where the person left the shortest route, which is where some principle may have been at play.</p>
+  <p><b>Demonstration only.</b> The person's path is hand-drawn from a screenshot and is not observed data. There are no tracked pedestrians yet.</p>
+</header>
+
+<section class="controls">
+  <div>
+    <label for="clock">Clock: <span id="clockOut"></span></label>
+    <input id="clock" type="range" min="0" max="240" step="1" value="0">
+    <span class="mute">Seconds since the walk began (0 to 240; the walk takes 4 minutes). Starts at 0.</span>
+  </div>
+  <div>
+    <label for="edgeDist">How close to the park edge counts as "on the edge": <span id="edgeOut"></span></label>
+    <input id="edgeDist" type="range" min="5" max="30" step="1" value="10">
+    <span class="mute">Feet from the park boundary (5 to 30). Starts at 10. Only the edge walker uses this.</span>
+  </div>
+</section>
+
+<main>
+  <aside class="panel">
+    <h2>Score sheet</h2>
+    <p class="mute" style="margin-top:0">Average distance in feet between each walker and the person, over the 4 minutes. Smaller means closer. Click a walker to see where it stayed within <span class="thr"></span> ft.</p>
+    <div id="scores"></div>
+    <p class="mute" id="scoreNote"></p>
+  </aside>
+
+  <section>
+    <svg id="map" viewBox="0 0 10 10" role="img" aria-label="Map of Madison Square Park with paths, trees, the person's path and three simulated walkers"></svg>
+    <p class="mute" id="legend"></p>
+  </section>
+
+  <aside class="panel">
+    <h2>Where the person left the shortest route</h2>
+    <p class="mute" style="margin-top:0">A stretch counts when the person is more than <span class="thr"></span> ft from the shortest route. Click one to see where every walker was.</p>
+    <div id="devs"></div>
+  </aside>
+</main>
+
+<footer>
+  <div class="panel">
+    <h2>Numbers and where they come from</h2>
+    <table>
+      <tr><th>Number</th><th>Value</th><th>Source</th></tr>
+      <tr><td>Park boundary</td><td>6.2 acres</td><td>NYC Parks, Parks Properties</td></tr>
+      <tr><td>Paths</td><td id="nPaths"></td><td>OpenStreetMap footways inside the boundary</td></tr>
+      <tr><td>Shade trees</td><td id="nTrees"></td><td>NYC Parks, Forestry Tree Points, status Full, inside the boundary</td></tr>
+      <tr><td>Time for the walk</td><td>240 s</td><td>Your reading of the 4-minute walk shown on the map screenshot</td></tr>
+      <tr><td>Walking speed</td><td id="speed"></td><td>Derived: length of the person's path divided by 240 s. All walkers use it</td></tr>
+      <tr><td>Canopy radius</td><td>20 ft</td><td>Assumption. The tree data has trunk diameter, not canopy width</td></tr>
+      <tr><td>Edge distance</td><td id="edgeTbl"></td><td>Assumption, the slider above</td></tr>
+      <tr><td>"Left the route" distance</td><td class="thr2"></td><td>Assumption</td></tr>
+      <tr><td>Person's path</td><td>20 points</td><td>Hand-drawn on a screenshot and read off by eye. Illustration, not observed data</td></tr>
+    </table>
+  </div>
+  <div class="panel">
+    <h2>How the walkers choose, and what this can't see</h2>
+    <p style="margin-top:0"><b>Shortest:</b> the shortest way along the paths. <b>Edge:</b> first minimizes the feet it walks farther than the edge distance from the boundary, then the length. <b>Shade:</b> first minimizes the feet it walks outside any tree's canopy, then the length. Each is a full preference for one principle, with no mixing.</p>
+    <p class="mute">Not seen: other people and how the person dodged them, real tracked paths, benches, sun angle and time of day (shade is fixed, every Full tree always casts it), seasons, leaf cover, and why the person chose their route. The paths come from a map of the park and may miss some. The 276 tree count is the city's records and may be high.</p>
+  </div>
+</footer>
+
+<script id="data" type="application/json">/*DATA*/</script>
+<script>
+(function () {
+  var D = JSON.parse(document.getElementById('data').textContent);
+  var TOTAL = 240, CANOPY = 20, THRESH = 20;
+  var COLORS = { shortest:'var(--route)', edge:'var(--edge)', shade:'var(--shade)' };
+  var NAMES = { shortest:'Shortest route', edge:'Stays on the edges', shade:'Stays under trees' };
+
+  // ---- geometry helpers (feet) ----
+  function dist(a, b) { return Math.hypot(a[0]-b[0], a[1]-b[1]); }
+  function lenOf(pl) { var s = 0; for (var i = 1; i < pl.length; i++) s += dist(pl[i-1], pl[i]); return s; }
+  function ptSeg(p, a, b) {
+    var dx = b[0]-a[0], dy = b[1]-a[1], l2 = dx*dx + dy*dy;
+    var t = l2 ? Math.max(0, Math.min(1, ((p[0]-a[0])*dx + (p[1]-a[1])*dy) / l2)) : 0;
+    return Math.hypot(p[0]-(a[0]+t*dx), p[1]-(a[1]+t*dy));
+  }
+  function ptLine(p, pl) { var m = Infinity; for (var i = 1; i < pl.length; i++) m = Math.min(m, ptSeg(p, pl[i-1], pl[i])); return m; }
+  function along(pl, d) {
+    if (d <= 0) return pl[0];
+    for (var i = 1; i < pl.length; i++) {
+      var l = dist(pl[i-1], pl[i]);
+      if (d <= l) { var t = l ? d / l : 0; return [pl[i-1][0] + t*(pl[i][0]-pl[i-1][0]), pl[i-1][1] + t*(pl[i][1]-pl[i-1][1])]; }
+      d -= l;
+    }
+    return pl[pl.length-1];
+  }
+  function slice(pl, d0, d1) {
+    var out = [along(pl, d0)], acc = 0;
+    for (var i = 1; i < pl.length; i++) { acc += dist(pl[i-1], pl[i]); if (acc > d0 && acc < d1) out.push(pl[i]); }
+    out.push(along(pl, d1)); return out;
+  }
+
+  // ---- the network: every path vertex is a node; consecutive vertices are edges ----
+  var nodes = [], index = {}, edges = [];
+  function nodeId(p) { var k = Math.round(p[0]*2) + ',' + Math.round(p[1]*2); if (!(k in index)) { index[k] = nodes.length; nodes.push(p); } return index[k]; }
+  D.paths.forEach(function (pl) { for (var i = 1; i < pl.length; i++) { var a = nodeId(pl[i-1]), b = nodeId(pl[i]); if (a !== b) edges.push([a, b, dist(nodes[a], nodes[b])]); } });
+  var adj = nodes.map(function () { return []; });
+  edges.forEach(function (e, i) { adj[e[0]].push([e[1], i]); adj[e[1]].push([e[0], i]); });
+
+  // ---- what each edge costs under each principle ----
+  var ring = D.boundary;
+  function edgeDistance(p) { return ptLine(p, ring); }
+  function shaded(p) { for (var i = 0; i < D.trees.length; i++) if (dist(p, D.trees[i]) <= CANOPY) return true; return false; }
+  function outsideLength(e, test) {
+    var a = nodes[e[0]], b = nodes[e[1]], n = Math.max(1, Math.ceil(e[2] / 3)), out = 0;
+    for (var i = 0; i < n; i++) { var t = (i + .5) / n, p = [a[0] + t*(b[0]-a[0]), a[1] + t*(b[1]-a[1])]; if (!test(p)) out += e[2] / n; }
+    return out;
+  }
+  var shadeOut = edges.map(function (e) { return outsideLength(e, shaded); });
+  var BIG = 1000; // the preferred thing is minimized first; length only breaks ties
+
+  function dijkstra(src, dst, cost) {
+    var d = nodes.map(function () { return Infinity; }), prev = nodes.map(function () { return null; }), done = {};
+    d[src] = 0;
+    for (;;) {
+      var u = -1, best = Infinity;
+      for (var i = 0; i < d.length; i++) if (!done[i] && d[i] < best) { best = d[i]; u = i; }
+      if (u < 0 || u === dst) break;
+      done[u] = true;
+      adj[u].forEach(function (a) { var nd = d[u] + cost(a[1]); if (nd < d[a[0]]) { d[a[0]] = nd; prev[a[0]] = [u, a[1]]; } });
+    }
+    if (d[dst] === Infinity) return null;
+    var route = [nodes[dst]], c = dst;
+    while (prev[c]) { c = prev[c][0]; route.push(nodes[c]); }
+    return route.reverse();
+  }
+  function nearest(p) { var b = 0, m = Infinity; nodes.forEach(function (n, i) { var d = dist(n, p); if (d < m) { m = d; b = i; } }); return b; }
+
+  var obs = D.observed, obsLen = lenOf(obs), SPEED = obsLen / TOTAL;
+  var src = nearest(obs[0]), dst = nearest(obs[obs.length-1]);
+  var routes = {};
+  routes.shortest = dijkstra(src, dst, function (i) { return edges[i][2]; });
+  routes.shade = dijkstra(src, dst, function (i) { return shadeOut[i] * BIG + edges[i][2]; });
+  var lens = {};
+
+  function buildEdgeRoute(edgeFt) {
+    var edgeOut = edges.map(function (e) { return outsideLength(e, function (p) { return edgeDistance(p) <= edgeFt; }); });
+    routes.edge = dijkstra(src, dst, function (i) { return edgeOut[i] * BIG + edges[i][2]; });
+  }
+
+  // ---- the run ----
+  function walker(key, t) { return along(routes[key], SPEED * t); }
+  function person(t) { return along(obs, SPEED * t); }
+  function score(key) { var s = 0; for (var t = 0; t <= TOTAL; t++) s += dist(walker(key, t), person(t)); return s / (TOTAL + 1); }
+  function closeIntervals(key) {
+    var out = [], start = null;
+    for (var t = 0; t <= TOTAL; t++) {
+      var ok = dist(walker(key, t), person(t)) <= THRESH;
+      if (ok && start === null) start = t;
+      if ((!ok || t === TOTAL) && start !== null) { out.push([start, ok ? t : t - 1]); start = null; }
+    }
+    return out;
+  }
+  function deviations() {
+    var out = [], start = null, mx = 0;
+    for (var t = 0; t <= TOTAL; t++) {
+      var d = ptLine(person(t), routes.shortest), off = d > THRESH;
+      if (off) { if (start === null) { start = t; mx = 0; } mx = Math.max(mx, d); }
+      if ((!off || t === TOTAL) && start !== null) { out.push({ a: start, b: off ? t : t - 1, max: mx }); start = null; }
+    }
+    return out;
+  }
+
+  // ---- drawing ----
+  var NS = 'http://www.w3.org/2000/svg', svg = document.getElementById('map');
+  var xs = ring.map(function (p) { return p[0]; }), ys = ring.map(function (p) { return p[1]; });
+  var W = Math.max.apply(null, xs), H = Math.max.apply(null, ys), PAD = 30;
+  svg.setAttribute('viewBox', (-PAD) + ' ' + (-PAD) + ' ' + (W + 2*PAD) + ' ' + (H + 2*PAD));
+  function Y(p) { return H - p[1]; }
+  function el(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; }
+  function pts(pl) { return pl.map(function (p) { return p[0].toFixed(1) + ',' + Y(p).toFixed(1); }).join(' '); }
+
+  var base = el('g', {}), dyn = el('g', {});
+  el('polygon', { points: pts(ring), fill: 'var(--park)', stroke: 'var(--ink)', 'stroke-width': 1.5 }, base);
+  D.trees.forEach(function (p) { el('circle', { cx: p[0], cy: Y(p), r: CANOPY, fill: 'var(--tree)', opacity: .22 }, base); });
+  D.paths.forEach(function (pl) { el('polyline', { points: pts(pl), fill: 'none', stroke: 'var(--mute)', 'stroke-width': 1, opacity: .5 }, base); });
+
+  var state = { sel: null, dev: null };
+  var clock = document.getElementById('clock'), edgeIn = document.getElementById('edgeDist');
+
+  function draw() {
+    var t = +clock.value;
+    while (dyn.firstChild) dyn.removeChild(dyn.firstChild);
+    // full routes, thin
+    ['shortest', 'edge', 'shade'].forEach(function (k) {
+      el('polyline', { points: pts(routes[k]), fill: 'none', stroke: COLORS[k], 'stroke-width': 2, 'stroke-dasharray': k === 'shortest' ? '6 4' : '', opacity: .8 }, dyn);
+    });
+    el('polyline', { points: pts(obs), fill: 'none', stroke: 'var(--obs)', 'stroke-width': 2.5 }, dyn);
+    // highlight: where the selected walker stayed close
+    if (state.sel) closeIntervals(state.sel).forEach(function (iv) {
+      el('polyline', { points: pts(slice(obs, SPEED*iv[0], SPEED*iv[1])), fill: 'none', stroke: COLORS[state.sel], 'stroke-width': 9, 'stroke-linecap': 'round', opacity: .5 }, dyn);
+    });
+    // highlight: the stretch where the person left the shortest route
+    var tt = t;
+    if (state.dev !== null) {
+      var d = devs[state.dev]; tt = Math.round((d.a + d.b) / 2);
+      el('polyline', { points: pts(slice(obs, SPEED*d.a, SPEED*d.b)), fill: 'none', stroke: 'var(--obs)', 'stroke-width': 9, 'stroke-linecap': 'round', opacity: .35 }, dyn);
+    }
+    // the clock: the person and each walker
+    var pp = person(tt);
+    el('circle', { cx: pp[0], cy: Y(pp), r: 9, fill: 'var(--obs)', stroke: '#fff', 'stroke-width': 2 }, dyn);
+    ['shortest', 'edge', 'shade'].forEach(function (k) {
+      var p = walker(k, tt); el('circle', { cx: p[0], cy: Y(p), r: 6, fill: COLORS[k], stroke: '#fff', 'stroke-width': 1.5 }, dyn);
+    });
+    document.getElementById('clockOut').textContent = Math.floor(tt / 60) + ':' + ('0' + (tt % 60)).slice(-2);
+    if (state.dev !== null) clock.value = tt;
+  }
+
+  var devs = [];
+  function refreshText() {
+    document.getElementById('edgeOut').textContent = edgeIn.value + ' ft';
+    document.getElementById('edgeTbl').textContent = edgeIn.value + ' ft';
+    var sc = {}, rank = ['shortest', 'edge', 'shade'];
+    rank.forEach(function (k) { sc[k] = score(k); });
+    rank.sort(function (a, b) { return sc[a] - sc[b]; });
+    var box = document.getElementById('scores'); box.innerHTML = '';
+    rank.forEach(function (k, i) {
+      var b = document.createElement('button'); b.className = 'row' + (state.sel === k ? ' on' : '');
+      b.innerHTML = '<span class="sw" style="background:' + COLORS[k] + '"></span>' + NAMES[k] +
+        '<div class="big">' + sc[k].toFixed(1) + ' ft</div><span class="mute">' + (i === 0 ? 'closest to the person' : 'rank ' + (i + 1) + ' of 3') + '</span>';
+      b.onclick = function () { state.sel = state.sel === k ? null : k; state.dev = null; refreshText(); draw(); };
+      box.appendChild(b);
+    });
+    var iv = state.sel ? closeIntervals(state.sel) : null;
+    document.getElementById('scoreNote').textContent = state.sel
+      ? NAMES[state.sel] + ' stayed within ' + THRESH + ' ft of the person for ' + iv.reduce(function (s, x) { return s + x[1] - x[0] + 1; }, 0) + ' of 241 seconds. Thick color on the map.'
+      : 'Nothing selected.';
+    devs = deviations();
+    var dv = document.getElementById('devs'); dv.innerHTML = '';
+    var offSecs = devs.reduce(function (s, d) { return s + d.b - d.a + 1; }, 0);
+    var sum = document.createElement('p'); sum.className = 'mute';
+    sum.textContent = devs.length ? 'The person was off the shortest route for ' + offSecs + ' of 241 seconds (' + Math.round(100 * offSecs / 241) + '%), in ' + devs.length + ' stretch' + (devs.length > 1 ? 'es' : '') + '.' : 'The person never left the shortest route.';
+    dv.appendChild(sum);
+    devs.forEach(function (d, i) {
+      var b = document.createElement('button'); b.className = 'row' + (state.dev === i ? ' on' : '');
+      var line = '<b>' + d.a + ' to ' + d.b + ' s</b><br><span class="mute">up to ' + d.max.toFixed(0) + ' ft off the shortest route</span>';
+      if (state.dev === i) { var tm = Math.round((d.a + d.b) / 2); line += '<br><span class="mute">At ' + tm + ' s the walkers were this far from the person:</span>' +
+        ['shortest', 'edge', 'shade'].map(function (k) { return '<br><span class="sw" style="background:' + COLORS[k] + '"></span>' + NAMES[k] + ': ' + dist(walker(k, tm), person(tm)).toFixed(0) + ' ft'; }).join(''); }
+      b.innerHTML = line; b.onclick = function () { state.dev = state.dev === i ? null : i; state.sel = null; refreshText(); draw(); };
+      dv.appendChild(b);
+    });
+  }
+
+  document.querySelectorAll('.thr').forEach(function (e) { e.textContent = THRESH; });
+  document.querySelector('.thr2').textContent = 'more than ' + THRESH + ' ft from the shortest route';
+  document.getElementById('nPaths').textContent = D.paths.length + ' path lines';
+  document.getElementById('nTrees').textContent = D.trees.length + ' trees';
+  document.getElementById('speed').textContent = SPEED.toFixed(1) + ' ft/s';
+  document.getElementById('legend').innerHTML =
+    '<span class="sw" style="background:var(--obs)"></span>The person (hand-drawn) &nbsp; ' +
+    ['shortest', 'edge', 'shade'].map(function (k) { return '<span class="sw" style="background:' + COLORS[k] + '"></span>' + NAMES[k]; }).join(' &nbsp; ') +
+    ' &nbsp; Faint green circles: 20 ft shade under each of ' + D.trees.length + ' trees.';
+
+  clock.addEventListener('input', function () { state.dev = null; refreshText(); draw(); });
+  edgeIn.addEventListener('input', function () { buildEdgeRoute(+edgeIn.value); refreshText(); draw(); });
+  buildEdgeRoute(+edgeIn.value); refreshText(); draw();
+  window.__sandbox = { routes: routes, SPEED: SPEED, score: score };
+})();
+</script>
+</body>
+</html>
